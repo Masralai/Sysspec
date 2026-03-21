@@ -23,19 +23,27 @@
 *.so
 *.dylib
 *.dll
+*.exe
 
-# Fortran module files
-*.mod
-*.smod
+# Build artifacts
+build/
+bin/
+out/
+x64/
+x86/
 
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
+# VS Code
+.vscode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+*.code-workspace
 
-
-# debug information files
-*.dwo
-*.vs
-.vs
+# VS Cache
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
