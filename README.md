@@ -1,5 +1,5 @@
 
-# Sysspec 
+# Sysspec
 
 **Sysspec** is a high-performance, cross-platform C++ CLI utility designed to fetch and display system hardware information in a beautiful, side-by-side terminal format. It leverages native OS APIs (WinAPI for Windows and POSIX for Linux) to provide hardware insights with zero overhead.
 
@@ -15,7 +15,7 @@
                                            CPU: Intel(R) Core(TM) i7...
 ```
 
-##  Features
+## Features
 
 * **Native Performance:** Written in C++17 with direct system calls.
 * **Cross-Platform:** Supports Windows (Registry-based) and Linux/macOS (Kernel-based).
@@ -23,7 +23,7 @@
 * **Containerized:** Full Docker support for reproducible builds and environment isolation.
 * **CI/CD Ready:** Integrated GitHub Actions for automated CMake builds.
 
-## 🛠 Hardware Data Points
+## Hardware Data Points
 
 | Category | Windows Implementation | Linux/Unix Implementation |
 | :--- | :--- | :--- |
@@ -35,14 +35,16 @@
 
 ---
 
-##  Quick Start
+## Quick Start
 
 ### Prerequisites
+
 * **CMake** (v3.10+)
 * **Compiler:** GCC 11+, Clang 12+, or MSVC 2019+
 * **Docker** (Optional, for containerized execution)
 
 ### Native Build
+
 ```bash
 # Generate build files
 cmake -B build -S .
@@ -55,6 +57,7 @@ cmake --build build --config Release
 ```
 
 ### Docker Build & Run
+
 To run Sysspec inside a container while still accessing your host machine's hardware info:
 
 ```bash
@@ -67,7 +70,8 @@ docker run --rm -it --pid="host" --network="host" sysspec
 
 ---
 
-##  Project Structure
+## Project Structure
+
 ```text
 SYSSPEC/
 ├── .github/workflows/  # CI/CD Pipelines (Native & Docker)
@@ -77,4 +81,3 @@ SYSSPEC/
 ├── Dockerfile          # Multi-stage production build
 └── compose.yml         # Container orchestration with host access
 ```
-
