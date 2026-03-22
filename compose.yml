@@ -1,0 +1,13 @@
+services:
+  sysspec-tool:
+    build: .
+    container_name: sysspec_cli
+    pid: "host"
+    network_mode: "host"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc/os-release:/host/etc/os-release:ro
+    stdin_open: true
+    tty: true
+    privileged: true

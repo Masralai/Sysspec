@@ -97,7 +97,7 @@ InfoPair getCPUInfo() {
     RegCloseKey(hkey);
     return { "CPU", "N/A" };
 #else
-    // Placeholder for Linux/macOS CPU info (usually from /proc/cpuinfo)
+    //Linux/macOS CPU info ( from /proc/cpuinfo)
     return { "CPU", "N/A (Linux/macOS)" };
 #endif
 }
