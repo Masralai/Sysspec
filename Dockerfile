@@ -23,6 +23,6 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /root
 
-COPY --from=builder /build_context/build/main .
+COPY --from=builder /build_context/build/bin/Sysspec .
 
-ENTRYPOINT [ "./main" ]
+ENTRYPOINT [ "./Sysspec" ]
