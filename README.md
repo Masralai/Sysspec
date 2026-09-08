@@ -25,13 +25,15 @@
 
 ## Hardware Data Points
 
-| Category | Windows Implementation | Linux/Unix Implementation |
+| Category | Windows Implementation | Linux Implementation |
 | :--- | :--- | :--- |
-| **OS Info** | Registry (`ProductName`) | `uname` (sysname + release) |
-| **CPU** | Registry (`ProcessorNameString`) | `/proc/cpuinfo` (Stubbed) |
-| **Memory** | `GlobalMemoryStatusEx` | `/proc/meminfo` (Planned) |
-| **Disk** | `GetDiskFreeSpaceEx` | `statvfs` (Planned) |
-| **GPU** | Registry (`DriverDesc`) | PCI Bus lookup (Planned) |
+| **OS Info** | Registry (`ProductName`+`DisplayVersion`+`CurrentBuild`) | `/etc/os-release` + `uname` |
+| **CPU** | Registry (`ProcessorNameString`) + `GetSystemInfo` | `/proc/cpuinfo` + `uname -m` |
+| **Memory** | `GlobalMemoryStatusEx` (humanized GiB/MiB + swap) | `/proc/meminfo` (humanized) |
+| **Disk** | `GetLogicalDrives` + `GetDiskFreeSpaceEx` (multi-disk) | `statvfs` + `/proc/mounts` |
+| **GPU** | Registry enumeration `{4d36e968...}\*` `DriverDesc` | `/sys/class/drm` + `uevent` |
+| **Resolution** | `GetSystemMetrics` + `SM_CMONITORS` | `/sys/class/drm/*/modes` |
+| **Uptime** | `GetTickCount` / `GetTickCount64` | `/proc/uptime` |
 
 ---
 
@@ -58,14 +60,27 @@ cmake --build build --config Release
 
 ### Docker Build & Run
 
-To run Sysspec inside a container while still accessing your host machine's hardware info:
+To run Sysspec inside a container while still accessing your host machine's hardware info (no privileged mode needed):
 
 ```bash
 # Build the image
 docker build -t sysspec .
 
-# Run with host privileges
-docker run --rm -it --pid="host" --network="host" sysspec
+# Run via compose (read-only mounts + HOST_ROOT)
+docker compose up
+
+# Or manual
+docker run --rm -it -v /proc:/host/proc:ro -v /sys:/host/sys:ro -v /etc/os-release:/host/etc/os-release:ro -e SYSSPEC_HOST_ROOT=/host sysspec --plain
+```
+
+### CLI Options
+
+```bash
+./build/bin/Sysspec --help
+./build/bin/Sysspec --plain              # no logo/color
+./build/bin/Sysspec --json               # JSON output
+./build/bin/Sysspec --fields=cpu,memory  # filter fields
+./build/bin/Sysspec --version
 ```
 
 ---
@@ -75,9 +90,15 @@ docker run --rm -it --pid="host" --network="host" sysspec
 ```text
 SYSSPEC/
 ├── .github/workflows/  # CI/CD Pipelines (Native & Docker)
+├── include/sysspec/    # types.hpp, platform.hpp, utils.hpp
 ├── src/
-│   └── main.cpp        # Core logic & OS-specific macros
-├── CMakeLists.txt      # Build configuration
-├── Dockerfile          # Multi-stage production build
-└── compose.yml         # Container orchestration with host access
+│   ├── main.cpp        # CLI + display logic
+│   └── platform/
+│       ├── common.cpp  # shared helpers (HOST_ROOT, humanize)
+│       ├── win.cpp     # Windows Registry/API impl
+│       └── linux.cpp   # Linux procfs/sysfs impl
+├── spec/               # spec-sysspec-overhaul.md
+├── CMakeLists.txt      # Build configuration (C++17, -Wall, install)
+├── Dockerfile          # Multi-stage, stripped, non-root
+└── compose.yml         # Read-only mounts, no privileged
 ```

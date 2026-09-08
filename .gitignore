@@ -47,3 +47,6 @@ x86/
 *.user
 *.userosscache
 *.sln.docstates
+
+# Sysspec: keep .txt docs, ignore only stray root .txt if needed
+# *.txt removed — was hiding docs
