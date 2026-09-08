@@ -21,3 +21,7 @@ jobs:
                 tags: sysspec:latest
                 cache-from: type=gha
                 cache-to: type=gha,mode=max
+            - name: Run container smoke test
+              run: |
+                docker run --rm -v /proc:/host/proc:ro -v /sys:/host/sys:ro -v /etc/os-release:/host/etc/os-release:ro -e SYSSPEC_HOST_ROOT=/host sysspec:latest --plain
+                docker run --rm -v /proc:/host/proc:ro -v /sys:/host/sys:ro -v /etc/os-release:/host/etc/os-release:ro -e SYSSPEC_HOST_ROOT=/host sysspec:latest --json
