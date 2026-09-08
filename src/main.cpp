@@ -1,218 +1,179 @@
-#ifdef _WIN32
-    #define NOMINMAX
-    #include <windows.h>
-    #include <winreg.h>
-#else
-    #include <sys/utsname.h>
-    #include <unistd.h>
-#endif
+#include "sysspec/platform.hpp"
+#include "sysspec/utils.hpp"
+#include "sysspec/types.hpp"
 
 #include <iostream>
-#include <cstdlib>
 #include <string>
 #include <vector>
-#include <sstream>
-#include <iterator>
 #include <algorithm>
+#include <cctype>
+#include <set>
+#include <cstdio>
 
+#ifdef _WIN32
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
+
+using namespace sysspec;
 using std::string;
-using std::to_string;
 using std::vector;
-using std::max;
-using std::stringstream;
-using std::getline;
 using std::cout;
+using std::cerr;
 using std::endl;
 
 const string LOGO = R"(
-  ____                                     
- / ___|  _   _  ___  ___  _ __   ___   ____ 
+  ____
+ / ___|  _   _  ___  ___  _ __   ___   ____
  \___ \ | | | |/ __|/ __|| '_ \ / _ \ /  _/
   ___) || |_| |\__ \\__ \| |_) |  __/|  |_
  |____/  \__, ||___/|___/| .__/ \___| \___\
-         |___/           |_|              
+         |___/           |_|
 )";
 
-struct InfoPair {
-    string key;
-    string value;
-};
-
-InfoPair getUsername() {
-#ifdef _WIN32
-    char buffer[257];
-    DWORD size = sizeof(buffer);
-    if (GetComputerNameA(buffer, &size)) {
-        return { "Hostname", string(buffer) };
-    }
-    return { "Hostname", "N/A" };
-#else
-    char buffer[256];  
-    if (gethostname(buffer, sizeof(buffer)) == 0) {
-        return { "Hostname", string(buffer) };
-    }
-    return { "Hostname", "N/A" };
-#endif
+static string toLower(string s) {
+    for (auto &c: s) c = (char)std::tolower((unsigned char)c);
+    return s;
 }
 
-InfoPair getOSInfo() {
-#ifdef _WIN32
-    HKEY hkey;
-    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, TEXT("SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion"), 0, KEY_READ, &hkey) != ERROR_SUCCESS) {
-        return { "OS", "N/A" };
+static string jsonEscape(const string& s) {
+    string out; out.reserve(s.size()+8);
+    for (unsigned char c: s) {
+        if (c=='"') out += "\\\"";
+        else if (c=='\\') out += "\\\\";
+        else if (c=='\n') out += "\\n";
+        else if (c=='\r') out += "\\r";
+        else if (c=='\t') out += "\\t";
+        else if (c < 0x20) { char buf[7]; snprintf(buf,sizeof(buf),"\\u%04x",c); out+=buf; }
+        else out += (char)c;
     }
-
-    char buffer[256];
-    DWORD buffersize = sizeof(buffer);
-
-    if (RegQueryValueEx(hkey, TEXT("ProductName"), NULL, NULL, (LPBYTE)buffer, &buffersize) == ERROR_SUCCESS) {
-        RegCloseKey(hkey);
-        return { "OS", string(buffer) };
-    }
-
-    RegCloseKey(hkey);
-    return { "OS", "N/A" };
-#else
-    struct utsname buffer;
-    if (uname(&buffer) == 0) {
-        return { "OS", string(buffer.sysname) + " " + string(buffer.release) };
-    }
-    return { "OS", "N/A" };
-#endif
+    return out;
 }
 
-InfoPair getCPUInfo() {
-#ifdef _WIN32
-    HKEY hkey;
-    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, TEXT("HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0"), 0, KEY_READ, &hkey) != ERROR_SUCCESS) {
-        return { "CPU", "N/A" };
-    }
-
-    char buffer[256];
-    DWORD buffersize = sizeof(buffer);
-    if (RegQueryValueEx(hkey, TEXT("ProcessorNameString"), NULL, NULL, (LPBYTE)buffer, &buffersize) == ERROR_SUCCESS) {
-        RegCloseKey(hkey);
-        return { "CPU", string(buffer) };
-    }
-    RegCloseKey(hkey);
-    return { "CPU", "N/A" };
-#else
-    //Linux/macOS CPU info ( from /proc/cpuinfo)
-    return { "CPU", "N/A (Linux/macOS)" };
-#endif
+static void printHelp(const char* prog) {
+    cout << "Sysspec 1.0.0 - cross-platform system profiler\n";
+    cout << "Usage: " << prog << " [options]\n";
+    cout << "Options:\n";
+    cout << "  --help            show help\n";
+    cout << "  --version         print version\n";
+    cout << "  --json            JSON output to stdout\n";
+    cout << "  --plain           no logo, no color\n";
+    cout << "  --fields=LIST     comma list filter e.g., --fields=hostname,os,cpu,memory,gpu,disk,resolution,uptime\n";
 }
 
-InfoPair getMemoryInfo() {
-#ifdef _WIN32
-    MEMORYSTATUSEX statex;
-    statex.dwLength = sizeof(statex);
-    GlobalMemoryStatusEx(&statex);
-
-    unsigned long long totalMB = statex.ullTotalPhys / (1024 * 1024);
-    unsigned long long freeMB = statex.ullAvailPhys / (1024 * 1024);
-    unsigned long long usedMB = totalMB - freeMB;
-
-    string mem_str = to_string(totalMB) + " MB (Used: " + to_string(usedMB) + " MB, Free: " + to_string(freeMB) + " MB)";
-    return { "Memory", mem_str };
-#else
-    return { "Memory", "N/A" };
-#endif
+static vector<InfoPair> collectAll() {
+    vector<InfoPair> v;
+    v.push_back(getHostname());
+    v.push_back(getOSInfo());
+    v.push_back(getCPUInfo());
+    v.push_back(getMemoryInfo());
+    v.push_back(getGPUInfo());
+    v.push_back(getDiskInfo());
+    v.push_back(getResolutionInfo());
+    v.push_back(getUptimeInfo());
+    return v;
 }
 
-InfoPair getGPUInfo() {
-#ifdef _WIN32
-    HKEY hkey;
-    
-    if (RegOpenKeyEx(HKEY_LOCAL_MACHINE, TEXT("SYSTEM\\CurrentControlSet\\Control\\Class\\{4d36e968-e325-11ce-bfc1-08002be10318}\\0000"), 0, KEY_READ, &hkey) != ERROR_SUCCESS) {
-        return { "GPU", "N/A" };
+static vector<InfoPair> filterFields(const vector<InfoPair>& all, const std::set<string>& fields) {
+    if (fields.empty()) return all;
+    vector<InfoPair> out;
+    for (auto &p: all) {
+        if (fields.count(toLower(p.key))) out.push_back(p);
     }
-    char buffer[256];
-    DWORD buffersize = sizeof(buffer);
-    if (RegQueryValueEx(hkey, TEXT("DriverDesc"), NULL, NULL, (LPBYTE)buffer, &buffersize) == ERROR_SUCCESS) {
-        RegCloseKey(hkey);
-        return { "GPU", string(buffer) };
+    return out;
+}
+
+static void printJson(const vector<InfoPair>& list) {
+    cout << "{\n";
+    for (size_t i=0;i<list.size();++i) {
+        cout << "  \"" << jsonEscape(toLower(list[i].key)) << "\": \"" << jsonEscape(list[i].value) << "\"";
+        if (i+1<list.size()) cout << ",";
+        cout << "\n";
     }
-    RegCloseKey(hkey);
-    return { "GPU", "N/A" };
-#else
-    return { "GPU", "N/A" };
-#endif
+    cout << "}\n";
 }
 
-InfoPair getDiskInfo() {
-#ifdef _WIN32
-    ULARGE_INTEGER freeBytesAvailable, totalNumberOfBytes, totalNumberOfFreeBytes;
-    if (GetDiskFreeSpaceEx(NULL, &freeBytesAvailable, &totalNumberOfBytes, &totalNumberOfFreeBytes)) {
-        unsigned long long totalGB = totalNumberOfBytes.QuadPart / (1024 * 1024 * 1024);
-        unsigned long long freeGB = totalNumberOfFreeBytes.QuadPart / (1024 * 1024 * 1024);
-        unsigned long long usedGB = totalGB - freeGB;
-        string disk_str = to_string(totalGB) + " GB (Used: " + to_string(usedGB) + " GB, Free: " + to_string(freeGB) + " GB)";
-        return { "Disk", disk_str };
+static void printSystemInfo(const vector<InfoPair>& infoList, bool plain) {
+    if (plain) {
+        for (auto &p: infoList) {
+            cout << p.key << ": " << p.value << "\n";
+        }
+        return;
     }
-    return { "Disk", "N/A" };
-#else
-    return { "Disk", "N/A" };
-#endif
-}
-
-InfoPair getResolutionInfo() {
-#ifdef _WIN32
-    int screenWidth = GetSystemMetrics(SM_CXSCREEN);
-    int screenHeight = GetSystemMetrics(SM_CYSCREEN);
-    string res_str = to_string(screenWidth) + "x" + to_string(screenHeight);
-    return { "Resolution", res_str };
-#else
-    return { "Resolution", "N/A" };
-#endif
-}
-
-vector<string> splitString(const string& str) {
-    stringstream ss(str);
-    string line;
-    vector<string> lines;
-
-    while (getline(ss, line)) {
-        lines.push_back(line);
-    }
-    return lines;
-}
-
-void printSystemInfo() {
-    vector<InfoPair> infoList;
-    infoList.push_back(getUsername());
-    infoList.push_back(getOSInfo());
-    infoList.push_back(getCPUInfo());
-    infoList.push_back(getMemoryInfo());
-    infoList.push_back(getGPUInfo());
-    infoList.push_back(getDiskInfo());
-    infoList.push_back(getResolutionInfo());
-
-    vector<string> logoLines = splitString(LOGO);
+    vector<string> logoLines = splitLines(LOGO);
     size_t max_logo_width = 0;
-    for (const auto& line : logoLines) {
-        max_logo_width = max(max_logo_width, line.length());
-    }
+    for (auto &line: logoLines) max_logo_width = std::max(max_logo_width, line.length());
 
-    size_t max_lines = max(logoLines.size(), infoList.size());
-    for (size_t i = 0; i < max_lines; ++i) {
+    bool useColor = false;
+#ifndef _WIN32
+    useColor = isatty(fileno(stdout));
+#else
+    // MinGW 6.3: avoid _fileno portability — disable color on Win for old toolchain
+    useColor = false;
+#endif
+    const char* cyan = "\033[36m";
+    const char* reset = "\033[0m";
+    const char* bold = "\033[1m";
+
+    size_t max_lines = std::max(logoLines.size(), infoList.size());
+    for (size_t i=0;i<max_lines;++i) {
         if (i < logoLines.size()) {
+            if (useColor) cout << cyan;
             cout << logoLines[i];
+            if (useColor) cout << reset;
             cout << string(max_logo_width - logoLines[i].length(), ' ');
         } else {
             cout << string(max_logo_width, ' ');
         }
-
         cout << "  ";
-
         if (i < infoList.size()) {
-            cout << "  " << infoList[i].key << ": " << infoList[i].value << endl;
+            if (useColor) cout << bold << infoList[i].key << reset << ": " << infoList[i].value;
+            else cout << infoList[i].key << ": " << infoList[i].value;
+            cout << "\n";
         } else {
-            cout << endl;
+            cout << "\n";
         }
     }
 }
 
-int main() {
-    printSystemInfo();
+int main(int argc, char* argv[]) {
+    bool json=false, plain=false, help=false, version=false;
+    std::set<string> fields;
+
+    for (int i=1;i<argc;++i) {
+        string arg = argv[i];
+        if (arg=="--help" || arg=="-h") help=true;
+        else if (arg=="--version" || arg=="-v") version=true;
+        else if (arg=="--json") json=true;
+        else if (arg=="--plain") plain=true;
+        else if (arg.rfind("--fields=",0)==0) {
+            string list = arg.substr(9);
+            string cur;
+            for (char c: list) {
+                if (c==',') { if(!cur.empty()) { fields.insert(toLower(trim(cur))); cur.clear(); } }
+                else cur+=c;
+            }
+            if(!cur.empty()) fields.insert(toLower(trim(cur)));
+        } else {
+            cerr << "Unknown option: " << arg << "\n";
+            printHelp(argv[0]);
+            return 2;
+        }
+    }
+
+    if (help) { printHelp(argv[0]); return 0; }
+    if (version) { cout << "Sysspec 1.0.0\n"; return 0; }
+
+    auto all = collectAll();
+    auto filtered = filterFields(all, fields);
+    if (filtered.empty() && !fields.empty()) {
+        cerr << "No matching fields for filter\n";
+        return 2;
+    }
+
+    if (json) printJson(filtered);
+    else printSystemInfo(filtered, plain);
+
     return 0;
 }
