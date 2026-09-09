@@ -97,7 +97,6 @@ SYSSPEC/
 │       ├── common.cpp  # shared helpers (HOST_ROOT, humanize)
 │       ├── win.cpp     # Windows Registry/API impl
 │       └── linux.cpp   # Linux procfs/sysfs impl
-├── spec/               # spec-sysspec-overhaul.md
 ├── CMakeLists.txt      # Build configuration (C++17, -Wall, install)
 ├── Dockerfile          # Multi-stage, stripped, non-root
 └── compose.yml         # Read-only mounts, no privileged
